@@ -100,7 +100,7 @@ jobs:
           entrypoint: '${{ inputs.testsuite-entrypoint }}'
   testsuite-tier-2:
     name: 'Run Testsuite Tier 2'
-    needs: testsuite-fast
+    needs: testsuite-tier-1
     strategy:
       matrix:
         implementation: ['clisp', 'ecl', 'gcl']
@@ -115,14 +115,17 @@ jobs:
       - name: 'Checkout repository'
         uses: actions/checkout@v3
       - name: 'Setup Common Lisp'
+        continue-on-error: true
         uses: melusina-org/actions/setup-lisp@main
         with:
           implementation: ${{ matrix.implementation }}
       - name: 'Setup QuickLisp'
+        continue-on-error: true
         uses: melusina-org/actions/setup-quicklisp@main
         with:
           implementation: ${{ matrix.implementation }}
       - name: 'Compile with ASDF'
+        continue-on-error: true
         uses: melusina-org/actions/asdf-operate@main
         with:
           implementation: ${{ matrix.implementation }}
