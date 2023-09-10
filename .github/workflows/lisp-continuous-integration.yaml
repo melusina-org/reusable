@@ -1,0 +1,183 @@
+name: 'Continuous Integration of Lisp System'
+on:
+  workflow_call:
+    inputs:
+      main-system:
+        required: true
+        type: string
+      testsuite-system:
+        required: true
+        type: string
+      testsuite-entrypoint:
+        required: true
+        type: string
+      linter-system:
+        required: true
+        type: string
+      linter-entrypoint:
+        required: true
+        type: string
+jobs:
+  testsuite-fast:
+    name: 'Run Fast Testsuite'
+    strategy:
+      matrix:
+        implementation: ['sbcl']
+        os: ['ubuntu-latest']
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+      - name: 'Setup Common Lisp'
+        uses: melusina-org/actions/setup-lisp@main
+        with:
+          implementation: ${{ matrix.implementation }}
+      - name: 'Setup QuickLisp'
+        uses: melusina-org/actions/setup-quicklisp@main
+        with:
+          implementation: ${{ matrix.implementation }}
+      - name: 'Compile main system with ASDF'
+        uses: melusina-org/actions/asdf-operate@main
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: '${{ inputs.main-system }}'
+          operation: 'asdf:compile-op'
+      - name: 'Compile testsuite system with ASDF'
+        uses: melusina-org/actions/asdf-operate@main
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: '${{ inputs.testsuite-system }}'
+          operation: 'asdf:compile-op'
+      - name: 'Compile linter system with ASDF'
+        uses: melusina-org/actions/asdf-operate@main
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: '${{ inputs.linter-system }}'
+          operation: 'asdf:compile-op'
+      - name: 'Run the testsuite'
+        uses: melusina-org/actions/run-lisp-program@main
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: '${{ inputs.testsuite-system }}'
+          entrypoint: '${{ inputs.testsuite-entrypoint }}'
+  testsuite-tier-1:
+    name: 'Run Testsuite Tier 1'
+    needs: testsuite-fast
+    strategy:
+      matrix:
+        implementation: ['abcl', 'sbcl']
+        os: ['ubuntu-latest', 'macos-latest']
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: 'Install MacPorts'
+        if: runner.os == 'macOS'
+        uses: melusina-org/gha-install-macports@v1
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+      - name: 'Setup Common Lisp'
+        uses: melusina-org/actions/setup-lisp@main
+        with:
+          implementation: ${{ matrix.implementation }}
+      - name: 'Setup QuickLisp'
+        uses: melusina-org/actions/setup-quicklisp@main
+        with:
+          implementation: ${{ matrix.implementation }}
+      - name: 'Compile with ASDF'
+        uses: melusina-org/actions/asdf-operate@main
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: '${{ inputs.testsuite-system }}'
+          operation: 'asdf:compile-op'
+      - name: 'Run the testsuite'
+        uses: melusina-org/actions/run-lisp-program@main
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: '${{ inputs.testsuite-system }}'
+          entrypoint: '${{ inputs.testsuite-entrypoint }}'
+  testsuite-tier-2:
+    name: 'Run Testsuite Tier 2'
+    needs: testsuite-fast
+    strategy:
+      matrix:
+        implementation: ['clisp', 'ecl', 'gcl']
+        os: ['ubuntu-latest', 'macos-latest']
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: 'Install MacPorts'
+        if: runner.os == 'macOS'
+        uses: melusina-org/gha-install-macports@v1
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+      - name: 'Setup Common Lisp'
+        uses: melusina-org/actions/setup-lisp@main
+        with:
+          implementation: ${{ matrix.implementation }}
+      - name: 'Setup QuickLisp'
+        uses: melusina-org/actions/setup-quicklisp@main
+        with:
+          implementation: ${{ matrix.implementation }}
+      - name: 'Compile with ASDF'
+        uses: melusina-org/actions/asdf-operate@main
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: '${{ inputs.testsuite-system }}'
+          operation: 'asdf:compile-op'
+      - name: 'Run the testsuite'
+        continue-on-error: true
+        uses: melusina-org/actions/run-lisp-program@main
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: '${{ inputs.testsuite-system }}'
+          entrypoint: '${{ inputs.testsuite-entrypoint }}'
+  quality-assurance:
+    name: 'Perform Quality Assurance'
+    needs: testsuite-fast
+    strategy:
+      matrix:
+        implementation: ['sbcl']
+        os: ['ubuntu-latest']
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+      - name: 'Setup Common Lisp'
+        uses: melusina-org/actions/setup-lisp@main
+        with:
+          implementation: ${{ matrix.implementation }}
+      - name: 'Setup QuickLisp'
+        uses: melusina-org/actions/setup-quicklisp@main
+        with:
+          implementation: ${{ matrix.implementation }}
+      - name: 'Run the linter'
+        continue-on-error: true
+        uses: melusina-org/actions/run-lisp-program@main
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: '${{ inputs.linter-system }}'
+          entrypoint: '${{ inputs.linter-entrypoint }}'
+  documentation:
+    name: 'Make Documentation'
+    needs: testsuite-fast
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: 'Setup Common Lisp'
+        uses: melusina-org/actions/setup-lisp@main
+        with:
+          implementation: sbcl
+      - name: 'Setup QuickLisp'
+        uses: melusina-org/actions/setup-quicklisp@main
+        with:
+          implementation: sbcl
+      - name: 'Make documentation'
+        uses: melusina-org/actions/make-texinfo-documentation@main
+        with:
+          system: '${{ inputs.main-system }}'
