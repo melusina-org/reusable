@@ -31,33 +31,33 @@ jobs:
       - name: 'Checkout repository'
         uses: actions/checkout@v3
       - name: 'Setup Common Lisp'
-        uses: melusina-org/actions/setup-lisp@main
+        uses: melusina-org/setup-common-lisp@v1
         with:
           implementation: ${{ matrix.implementation }}
       - name: 'Setup QuickLisp'
-        uses: melusina-org/actions/setup-quicklisp@main
+        uses: melusina-org/setup-quicklisp@v1
         with:
           implementation: ${{ matrix.implementation }}
       - name: 'Compile main system with ASDF'
-        uses: melusina-org/actions/asdf-operate@main
+        uses: melusina-org/asdf-operate@v1
         with:
           implementation: ${{ matrix.implementation }}
           system: '${{ inputs.main-system }}'
           operation: 'asdf:compile-op'
       - name: 'Compile testsuite system with ASDF'
-        uses: melusina-org/actions/asdf-operate@main
+        uses: melusina-org/asdf-operate@v1
         with:
           implementation: ${{ matrix.implementation }}
           system: '${{ inputs.testsuite-system }}'
           operation: 'asdf:compile-op'
       - name: 'Compile linter system with ASDF'
-        uses: melusina-org/actions/asdf-operate@main
+        uses: melusina-org/asdf-operate@v1
         with:
           implementation: ${{ matrix.implementation }}
           system: '${{ inputs.linter-system }}'
           operation: 'asdf:compile-op'
       - name: 'Run the testsuite'
-        uses: melusina-org/actions/run-lisp-program@main
+        uses: melusina-org/run-common-lisp-program@v1
         with:
           implementation: ${{ matrix.implementation }}
           system: '${{ inputs.testsuite-system }}'
@@ -79,21 +79,21 @@ jobs:
       - name: 'Checkout repository'
         uses: actions/checkout@v3
       - name: 'Setup Common Lisp'
-        uses: melusina-org/actions/setup-lisp@main
+        uses: melusina-org/setup-common-lisp@v1
         with:
           implementation: ${{ matrix.implementation }}
       - name: 'Setup QuickLisp'
-        uses: melusina-org/actions/setup-quicklisp@main
+        uses: melusina-org/setup-quicklisp@v1
         with:
           implementation: ${{ matrix.implementation }}
       - name: 'Compile with ASDF'
-        uses: melusina-org/actions/asdf-operate@main
+        uses: melusina-org/asdf-operate@v1
         with:
           implementation: ${{ matrix.implementation }}
           system: '${{ inputs.testsuite-system }}'
           operation: 'asdf:compile-op'
       - name: 'Run the testsuite'
-        uses: melusina-org/actions/run-lisp-program@main
+        uses: melusina-org/run-common-lisp-program@v1
         with:
           implementation: ${{ matrix.implementation }}
           system: '${{ inputs.testsuite-system }}'
@@ -116,24 +116,24 @@ jobs:
         uses: actions/checkout@v3
       - name: 'Setup Common Lisp'
         continue-on-error: true
-        uses: melusina-org/actions/setup-lisp@main
+        uses: melusina-org/setup-common-lisp@v1
         with:
           implementation: ${{ matrix.implementation }}
       - name: 'Setup QuickLisp'
         continue-on-error: true
-        uses: melusina-org/actions/setup-quicklisp@main
+        uses: melusina-org/setup-quicklisp@v1
         with:
           implementation: ${{ matrix.implementation }}
       - name: 'Compile with ASDF'
         continue-on-error: true
-        uses: melusina-org/actions/asdf-operate@main
+        uses: melusina-org/asdf-operate@v1
         with:
           implementation: ${{ matrix.implementation }}
           system: '${{ inputs.testsuite-system }}'
           operation: 'asdf:compile-op'
       - name: 'Run the testsuite'
         continue-on-error: true
-        uses: melusina-org/actions/run-lisp-program@main
+        uses: melusina-org/run-common-lisp-program@v1
         with:
           implementation: ${{ matrix.implementation }}
           system: '${{ inputs.testsuite-system }}'
@@ -152,16 +152,16 @@ jobs:
       - name: 'Checkout repository'
         uses: actions/checkout@v3
       - name: 'Setup Common Lisp'
-        uses: melusina-org/actions/setup-lisp@main
+        uses: melusina-org/setup-common-lisp@v1
         with:
           implementation: ${{ matrix.implementation }}
       - name: 'Setup QuickLisp'
-        uses: melusina-org/actions/setup-quicklisp@main
+        uses: melusina-org/setup-quicklisp@v1
         with:
           implementation: ${{ matrix.implementation }}
       - name: 'Run the linter'
         continue-on-error: true
-        uses: melusina-org/actions/run-lisp-program@main
+        uses: melusina-org/run-common-lisp-program@v1
         with:
           implementation: ${{ matrix.implementation }}
           system: '${{ inputs.linter-system }}'
@@ -173,14 +173,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: 'Setup Common Lisp'
-        uses: melusina-org/actions/setup-lisp@main
+        uses: melusina-org/setup-common-lisp@v1
         with:
           implementation: sbcl
       - name: 'Setup QuickLisp'
-        uses: melusina-org/actions/setup-quicklisp@main
+        uses: melusina-org/setup-quicklisp@v1
         with:
           implementation: sbcl
       - name: 'Make documentation'
-        uses: melusina-org/actions/make-texinfo-documentation@main
+        uses: melusina-org/make-lisp-system-documentation-texinfo@v1
         with:
           system: '${{ inputs.main-system }}'
