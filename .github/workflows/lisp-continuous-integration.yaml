@@ -38,6 +38,10 @@ jobs:
         uses: melusina-org/setup-quicklisp@v1
         with:
           implementation: ${{ matrix.implementation }}
+          additional-systems: >-
+            ${{ inputs.main-system }}
+            ${{ inputs.testsuite-system }}
+            ${{ inputs.linter-system }}
       - name: 'Compile main system with ASDF'
         uses: melusina-org/asdf-operate@v1
         with:
@@ -86,6 +90,10 @@ jobs:
         uses: melusina-org/setup-quicklisp@v1
         with:
           implementation: ${{ matrix.implementation }}
+          additional-systems: >-
+            ${{ inputs.main-system }}
+            ${{ inputs.testsuite-system }}
+            ${{ inputs.linter-system }}
       - name: 'Compile with ASDF'
         uses: melusina-org/asdf-operate@v1
         with:
@@ -124,6 +132,10 @@ jobs:
         uses: melusina-org/setup-quicklisp@v1
         with:
           implementation: ${{ matrix.implementation }}
+          additional-systems: >-
+            ${{ inputs.main-system }}
+            ${{ inputs.testsuite-system }}
+            ${{ inputs.linter-system }}
       - name: 'Compile with ASDF'
         continue-on-error: true
         uses: melusina-org/asdf-operate@v1
