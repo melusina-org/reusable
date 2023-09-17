@@ -18,12 +18,28 @@ on:
         required: true
         type: string
 jobs:
+  configure-matrix-fast-testsuite:
+    name: 'Configure Matrices'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Configure Fast Testsuite Implementation'
+        id: 'implementation'
+        run: |
+          printf 'implementation=sbcl\n' >> $GITHUB_OUTPUT
+      - name: 'Configure Fast Testsuite OS'
+        id: 'os'
+        run: |
+          printf 'os=ubuntu-latest\n' >> $GITHUB_OUTPUT
+    outputs:
+      implementation: ${{ toJSON(steps.*.outputs.implementation) }}
+      os: ${{ toJSON(steps.*.outputs.os) }}
   testsuite-fast:
+    needs: configure-matrix-fast-testsuite
     name: 'Run Fast Testsuite'
     strategy:
       matrix:
-        implementation: ['sbcl']
-        os: ['ubuntu-latest']
+        implementation: ${{ fromJSON(needs.configure-matrix-fast-testsuite.outputs.implementation) }}
+        os: ${{ fromJSON(needs.configure-matrix-fast-testsuite.outputs.os) }}
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
