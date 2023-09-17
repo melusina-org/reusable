@@ -2,44 +2,84 @@ name: 'Continuous Integration of Lisp System'
 on:
   workflow_call:
     inputs:
-      main-system:
-        required: true
+      parameters:
         type: string
-      testsuite-system:
-        required: true
-        type: string
-      testsuite-entrypoint:
-        required: true
-        type: string
-      linter-system:
-        required: true
-        type: string
-      linter-entrypoint:
-        required: true
-        type: string
+        default: .github/parameters/lisp-continuous-integration.yaml
 jobs:
-  configure-matrix-fast-testsuite:
-    name: 'Configure Matrices'
+  configure:
+    name: 'Configure Continuous Integration'
     runs-on: 'ubuntu-latest'
     steps:
-      - name: 'Configure Fast Testsuite Implementation'
-        id: 'implementation'
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+      - name: 'Ensure parameter file is present'
         run: |
-          printf 'implementation=sbcl\n' >> $GITHUB_OUTPUT
-      - name: 'Configure Fast Testsuite OS'
-        id: 'os'
+          parameters="${{ inputs.parameters }}"
+          test -f "${parameters}" -a -r "${parameters}"
+
+      - name: 'Configure Continuous Integration'
+        id: 'configure'
         run: |
-          printf 'os=ubuntu-latest\n' >> $GITHUB_OUTPUT
+          parameters="${{ inputs.parameters }}"
+          extract()
+          (
+              yq --output-format=json "$1" < ${parameters} | jq -c
+          )
+            
+          parameter()
+          {
+              local value
+              value=$(extract "$2")
+              if [ "${value}" = 'null' ]; then
+                if [ "$3" = ':required' ]; then
+                      1>&2 printf 'Failure: %s: Missing parameter.\n' "$1"
+                      exit 70
+                fi
+                value="$3"
+              fi
+              printf '%s=%s\n' "$1" "${value}" >> "${GITHUB_OUTPUT}"
+              2>&1 printf 'Parameter %s: %s\n' "$1" "${value}"
+          }
+
+          parameter fast-implementation '.fast.implementation' '["sbcl"]'
+          parameter fast-os '.fast.os' '["ubuntu-latest"]'
+          parameter tier-1-implementation '.tier-1.implementation' '["sbcl"]'
+          parameter tier-1-os '.tier-1.os' '["macos-latest", "ubuntu-latest"]'
+          parameter tier-2-implementation '.tier-2.implementation' '[]'
+          parameter tier-2-os '.tier-2.os' '[]'
+          parameter main-system '.main-system' ':required'
+          parameter unit-tests-system '.unit-tests.system' ':required'
+          parameter unit-tests-entrypoint '.unit-tests.entrypoint' ':required'
+          parameter component-tests-system '.component-tests.system' '""'
+          parameter component-tests-entrypoint '.component-tests.entrypoint' '""'
+          parameter deployment-tests-system '.deployment-tests.system' '""'
+          parameter deployment-tests-entrypoint '.deployment-tests.entrypoint' '""'
+          parameter linter-system '.linter.system' '""'
+          parameter linter-entrypoint '.linter.entrypoint' '""'
     outputs:
-      implementation: ${{ toJSON(steps.*.outputs.implementation) }}
-      os: ${{ toJSON(steps.*.outputs.os) }}
-  testsuite-fast:
-    needs: configure-matrix-fast-testsuite
+      fast-implementation: ${{ steps.configure.outputs.fast-implementation }}
+      fast-os: ${{ steps.configure.outputs.fast-os }}
+      tier-1-implementation: ${{ steps.configure.outputs.tier-1-implementation }}
+      tier-1-os: ${{ steps.configure.outputs.tier-1-os }}
+      tier-2-implementation: ${{ steps.configure.outputs.tier-2-implementation }}
+      tier-2-os: ${{ steps.configure.outputs.tier-2-os }}
+      main-system: ${{ fromJSON(steps.configure.outputs.main-system) }}
+      linter-system: ${{ fromJSON(steps.configure.outputs.linter-system) }}
+      linter-entrypoint: ${{ fromJSON(steps.configure.outputs.linter-entrypoint) }}
+      unit-tests-system: ${{ fromJSON(steps.configure.outputs.unit-tests-system) }}
+      unit-tests-entrypoint: ${{ fromJSON(steps.configure.outputs.unit-tests-entrypoint) }}
+      component-tests-system: ${{ fromJSON(steps.configure.outputs.component-tests-system) }}
+      component-tests-entrypoint: ${{ fromJSON(steps.configure.outputs.component-tests-entrypoint) }}
+      deployment-tests-system: ${{ fromJSON(steps.configure.outputs.deployment-tests-system) }}
+      deployment-tests-entrypoint: ${{ fromJSON(steps.configure.outputs.deployment-tests-entrypoint) }}
+
+  fast-testsuite:
+    needs: configure
     name: 'Run Fast Testsuite'
     strategy:
       matrix:
-        implementation: ${{ fromJSON(needs.configure-matrix-fast-testsuite.outputs.implementation) }}
-        os: ${{ fromJSON(needs.configure-matrix-fast-testsuite.outputs.os) }}
+        implementation: ${{ fromJSON(needs.configure.outputs.fast-implementation) }}
+        os: ${{ fromJSON(needs.configure.outputs.fast-os) }}
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -55,120 +95,43 @@ jobs:
         with:
           implementation: ${{ matrix.implementation }}
           additional-systems: >-
-            ${{ inputs.main-system }}
-            ${{ inputs.testsuite-system }}
-            ${{ inputs.linter-system }}
+            ${{ needs.configure.outputs.main-system }}
+            ${{ needs.configure.outputs.unit-tests-system }}
+            ${{ needs.configure.outputs.component-tests-system }}
+            ${{ needs.configure.outputs.deployment-tests-system }}
+            ${{ needs.configure.outputs.linter-system }}
       - name: 'Compile main system with ASDF'
         uses: melusina-org/asdf-operate@v1
         with:
           implementation: ${{ matrix.implementation }}
-          system: '${{ inputs.main-system }}'
+          system: ${{ needs.configure.outputs.main-system }}
           operation: 'asdf:compile-op'
-      - name: 'Compile testsuite system with ASDF'
+      - name: 'Compile unit tests system with ASDF'
         uses: melusina-org/asdf-operate@v1
         with:
           implementation: ${{ matrix.implementation }}
-          system: '${{ inputs.testsuite-system }}'
+          system: ${{ needs.configure.outputs.unit-tests-system }}
           operation: 'asdf:compile-op'
       - name: 'Compile linter system with ASDF'
+        if: needs.configure.outputs.linter-system != ''
         uses: melusina-org/asdf-operate@v1
         with:
           implementation: ${{ matrix.implementation }}
-          system: '${{ inputs.linter-system }}'
+          system: ${{ needs.configure.outputs.linter-system }}
           operation: 'asdf:compile-op'
-      - name: 'Run the testsuite'
+      - name: 'Run unit tests'
         uses: melusina-org/run-common-lisp-program@v1
         with:
           implementation: ${{ matrix.implementation }}
-          system: '${{ inputs.testsuite-system }}'
-          entrypoint: '${{ inputs.testsuite-entrypoint }}'
-  testsuite-tier-1:
-    name: 'Run Testsuite Tier 1'
-    needs: testsuite-fast
-    strategy:
-      matrix:
-        implementation: ['abcl', 'sbcl']
-        os: ['ubuntu-latest', 'macos-latest']
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-    steps:
-      - name: 'Install MacPorts'
-        if: runner.os == 'macOS'
-        uses: melusina-org/gha-install-macports@v1
-      - name: 'Checkout repository'
-        uses: actions/checkout@v3
-      - name: 'Setup Common Lisp'
-        uses: melusina-org/setup-common-lisp@v1
-        with:
-          implementation: ${{ matrix.implementation }}
-      - name: 'Setup QuickLisp'
-        uses: melusina-org/setup-quicklisp@v1
-        with:
-          implementation: ${{ matrix.implementation }}
-          additional-systems: >-
-            ${{ inputs.main-system }}
-            ${{ inputs.testsuite-system }}
-            ${{ inputs.linter-system }}
-      - name: 'Compile with ASDF'
-        uses: melusina-org/asdf-operate@v1
-        with:
-          implementation: ${{ matrix.implementation }}
-          system: '${{ inputs.testsuite-system }}'
-          operation: 'asdf:compile-op'
-      - name: 'Run the testsuite'
-        uses: melusina-org/run-common-lisp-program@v1
-        with:
-          implementation: ${{ matrix.implementation }}
-          system: '${{ inputs.testsuite-system }}'
-          entrypoint: '${{ inputs.testsuite-entrypoint }}'
-  testsuite-tier-2:
-    name: 'Run Testsuite Tier 2'
-    needs: testsuite-tier-1
-    strategy:
-      matrix:
-        implementation: ['clisp', 'ecl', 'gcl']
-        os: ['ubuntu-latest', 'macos-latest']
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-    steps:
-      - name: 'Install MacPorts'
-        if: runner.os == 'macOS'
-        uses: melusina-org/gha-install-macports@v1
-      - name: 'Checkout repository'
-        uses: actions/checkout@v3
-      - name: 'Setup Common Lisp'
-        continue-on-error: true
-        uses: melusina-org/setup-common-lisp@v1
-        with:
-          implementation: ${{ matrix.implementation }}
-      - name: 'Setup QuickLisp'
-        continue-on-error: true
-        uses: melusina-org/setup-quicklisp@v1
-        with:
-          implementation: ${{ matrix.implementation }}
-          additional-systems: >-
-            ${{ inputs.main-system }}
-            ${{ inputs.testsuite-system }}
-            ${{ inputs.linter-system }}
-      - name: 'Compile with ASDF'
-        continue-on-error: true
-        uses: melusina-org/asdf-operate@v1
-        with:
-          implementation: ${{ matrix.implementation }}
-          system: '${{ inputs.testsuite-system }}'
-          operation: 'asdf:compile-op'
-      - name: 'Run the testsuite'
-        continue-on-error: true
-        uses: melusina-org/run-common-lisp-program@v1
-        with:
-          implementation: ${{ matrix.implementation }}
-          system: '${{ inputs.testsuite-system }}'
-          entrypoint: '${{ inputs.testsuite-entrypoint }}'
+          system: ${{ needs.configure.outputs.unit-tests-system }}
+          entrypoint: ${{ needs.configure.outputs.unit-tests-entrypoint }}
+
   quality-assurance:
     name: 'Perform Quality Assurance'
-    needs: testsuite-fast
+    needs:
+      - configure
+      - fast-testsuite
+    if: needs.configure.outputs.linter-system != ''
     strategy:
       matrix:
         implementation: ['sbcl']
@@ -187,16 +150,96 @@ jobs:
         uses: melusina-org/setup-quicklisp@v1
         with:
           implementation: ${{ matrix.implementation }}
+          additional-systems: >-
+            ${{ needs.configure.outputs.linter-system }}
       - name: 'Run the linter'
         continue-on-error: true
         uses: melusina-org/run-common-lisp-program@v1
         with:
           implementation: ${{ matrix.implementation }}
-          system: '${{ inputs.linter-system }}'
-          entrypoint: '${{ inputs.linter-entrypoint }}'
+          system: ${{ inputs.linter-system }}
+          entrypoint: ${{ inputs.linter-entrypoint }}
+
+  testsuite-tier-1:
+    name: 'Run Testsuite Tier 1'
+    needs:
+      - configure
+      - fast-testsuite
+      - quality-assurance
+    strategy:
+      matrix:
+        implementation: ${{ fromJSON(needs.configure.outputs.tier-1-implementation) }}
+        os: ${{ fromJSON(needs.configure.outputs.tier-1-os) }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: 'Install MacPorts'
+        if: runner.os == 'macOS'
+        uses: melusina-org/gha-install-macports@v1
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+      - name: 'Setup Common Lisp'
+        uses: melusina-org/setup-common-lisp@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+      - name: 'Setup QuickLisp'
+        uses: melusina-org/setup-quicklisp@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          additional-systems: >-
+            ${{ needs.configure.outputs.main-system }}
+            ${{ needs.configure.outputs.unit-tests-system }}
+            ${{ needs.configure.outputs.component-tests-system }}
+            ${{ needs.configure.outputs.deployment-tests-system }}
+            ${{ needs.configure.outputs.linter-system }}
+      - name: 'Compile unit tests with ASDF'
+        uses: melusina-org/asdf-operate@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.unit-tests-system }}
+          operation: 'asdf:compile-op'
+      - name: 'Compile component tests with ASDF'
+        if: needs.configure.outputs.component-tests-system != ''
+        uses: melusina-org/asdf-operate@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.component-tests-system }}
+          operation: 'asdf:compile-op'
+      - name: 'Compile deployment tests with ASDF'
+        if: needs.configure.outputs.deployment-tests-system != ''
+        uses: melusina-org/asdf-operate@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.deployment-tests-system }}
+          operation: 'asdf:compile-op'
+      - name: 'Run unit tests'
+        uses: melusina-org/run-common-lisp-program@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.unit-tests-system }}
+          entrypoint: ${{ needs.configure.outputs.unit-tests-entrypoint }}
+      - name: 'Run component tests'
+        if: needs.configure.outputs.component-tests-system != ''
+        uses: melusina-org/run-common-lisp-program@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.component-tests-system }}
+          entrypoint: ${{ needs.configure.outputs.component-tests-entrypoint }}
+      - name: 'Run deployment tests'
+        if: needs.configure.outputs.deployment-tests-system != ''
+        uses: melusina-org/run-common-lisp-program@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.deployment-tests-system }}
+          entrypoint: ${{ needs.configure.outputs.deployment-tests-entrypoint }}
+
   documentation:
     name: 'Make Documentation'
-    needs: testsuite-fast
+    needs:
+      - configure
+      - fast-testsuite
+      - quality-assurance
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -211,4 +254,4 @@ jobs:
       - name: 'Make documentation'
         uses: melusina-org/make-lisp-system-documentation-texinfo@v1
         with:
-          system: '${{ inputs.main-system }}'
+          system: ${{ needs.configure.outputs.main-system }}
