@@ -263,6 +263,7 @@ jobs:
       - name: 'Checkout repository'
         uses: actions/checkout@v3
       - name: 'Setup Common Lisp'
+        continue-on-error: true
         uses: melusina-org/setup-common-lisp@v1
         with:
           implementation: ${{ matrix.implementation }}
