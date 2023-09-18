@@ -56,6 +56,7 @@ jobs:
           parameter deployment-tests-entrypoint '.deployment-tests.entrypoint' '""'
           parameter linter-system '.linter.system' '""'
           parameter linter-entrypoint '.linter.entrypoint' '""'
+          parameter enable-texinfo-documentation '.enable-texinfo-documentation' 'false'
     outputs:
       fast-implementation: ${{ steps.configure.outputs.fast-implementation }}
       fast-os: ${{ steps.configure.outputs.fast-os }}
@@ -72,6 +73,7 @@ jobs:
       component-tests-entrypoint: ${{ fromJSON(steps.configure.outputs.component-tests-entrypoint) }}
       deployment-tests-system: ${{ fromJSON(steps.configure.outputs.deployment-tests-system) }}
       deployment-tests-entrypoint: ${{ fromJSON(steps.configure.outputs.deployment-tests-entrypoint) }}
+      enable-texinfo-documentation: ${{ fromJSON(steps.configure.outputs.enable-texinfo-documentation) }}
 
   fast-testsuite:
     needs: configure
@@ -324,6 +326,7 @@ jobs:
 
   documentation:
     name: 'Make Documentation'
+    if: needs.configure.outputs.enable-texinfo-documentation
     needs:
       - configure
       - fast-testsuite
