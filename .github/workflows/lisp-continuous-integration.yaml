@@ -170,6 +170,9 @@ jobs:
       matrix:
         implementation: ${{ fromJSON(needs.configure.outputs.tier-1-implementation) }}
         os: ${{ fromJSON(needs.configure.outputs.tier-1-os) }}
+        exclude:
+          - os: 'ubuntu-latest'
+            implementation: 'ccl'
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -245,6 +248,9 @@ jobs:
       matrix:
         implementation: ${{ fromJSON(needs.configure.outputs.tier-2-implementation) }}
         os: ${{ fromJSON(needs.configure.outputs.tier-2-os) }}
+        exclude:
+          - os: 'ubuntu-latest'
+            implementation: 'ccl'
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
