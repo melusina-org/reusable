@@ -1,0 +1,267 @@
+name: 'Continuous Integration of Utilities written with Common Lisp'
+on:
+  workflow_call:
+    inputs:
+      parameters:
+        type: string
+        default: .github/parameters/lisp-continuous-integration.yaml
+jobs:
+  configure:
+    name: 'Configure Continuous Integration'
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+      - name: 'Ensure parameter file is present'
+        run: |
+          parameters="${{ inputs.parameters }}"
+          test -f "${parameters}" -a -r "${parameters}"
+
+      - name: 'Configure Continuous Integration'
+        id: 'configure'
+        run: |
+          parameters="${{ inputs.parameters }}"
+          extract()
+          (
+              yq --output-format=json "$1" < ${parameters} | jq -c
+          )
+            
+          parameter()
+          {
+              local value
+              value=$(extract "$2")
+              if [ "${value}" = 'null' ]; then
+                if [ "$3" = ':required' ]; then
+                      1>&2 printf 'Failure: %s: Missing parameter.\n' "$1"
+                      exit 70
+                fi
+                value="$3"
+              fi
+              printf '%s=%s\n' "$1" "${value}" >> "${GITHUB_OUTPUT}"
+              2>&1 printf 'Parameter %s: %s\n' "$1" "${value}"
+          }
+
+          parameter fast-implementation '.fast.implementation' '["sbcl"]'
+          parameter fast-os '.fast.os' '["macos-latest"]'
+          parameter tier-1-implementation '.tier-1.implementation' '["sbcl"]'
+          parameter tier-1-os '.tier-1.os' '["macos-latest", "ubuntu-latest"]'
+          parameter tier-2-implementation '.tier-2.implementation' '[]'
+          parameter tier-2-os '.tier-2.os' '[]'
+          parameter main-system '.main-system' ':required'
+          parameter executable-system '.executable-system' ':required'
+          parameter unit-tests-system '.unit-tests.system' ':required'
+          parameter unit-tests-entrypoint '.unit-tests.entrypoint' ':required'
+          parameter component-tests-system '.component-tests.system' '""'
+          parameter component-tests-entrypoint '.component-tests.entrypoint' '""'
+          parameter deployment-tests-system '.deployment-tests.system' '""'
+          parameter deployment-tests-entrypoint '.deployment-tests.entrypoint' '""'
+          parameter linter-system '.linter.system' '""'
+          parameter linter-entrypoint '.linter.entrypoint' '""'
+          parameter enable-texinfo-documentation '.enable-texinfo-documentation' 'false'
+    outputs:
+      fast-implementation: ${{ steps.configure.outputs.fast-implementation }}
+      fast-os: ${{ steps.configure.outputs.fast-os }}
+      tier-1-implementation: ${{ steps.configure.outputs.tier-1-implementation }}
+      tier-1-os: ${{ steps.configure.outputs.tier-1-os }}
+      tier-2-implementation: ${{ steps.configure.outputs.tier-2-implementation }}
+      tier-2-os: ${{ steps.configure.outputs.tier-2-os }}
+      main-system: ${{ fromJSON(steps.configure.outputs.main-system) }}
+      executable-system: ${{ fromJSON(steps.configure.outputs.executable-system) }}
+      linter-system: ${{ fromJSON(steps.configure.outputs.linter-system) }}
+      linter-entrypoint: ${{ fromJSON(steps.configure.outputs.linter-entrypoint) }}
+      unit-tests-system: ${{ fromJSON(steps.configure.outputs.unit-tests-system) }}
+      unit-tests-entrypoint: ${{ fromJSON(steps.configure.outputs.unit-tests-entrypoint) }}
+      component-tests-system: ${{ fromJSON(steps.configure.outputs.component-tests-system) }}
+      component-tests-entrypoint: ${{ fromJSON(steps.configure.outputs.component-tests-entrypoint) }}
+      deployment-tests-system: ${{ fromJSON(steps.configure.outputs.deployment-tests-system) }}
+      deployment-tests-entrypoint: ${{ fromJSON(steps.configure.outputs.deployment-tests-entrypoint) }}
+      enable-texinfo-documentation: ${{ fromJSON(steps.configure.outputs.enable-texinfo-documentation) }}
+
+  fast-testsuite:
+    needs: configure
+    name: 'Fast Testsuite'
+    strategy:
+      matrix:
+        implementation: ${{ fromJSON(needs.configure.outputs.fast-implementation) }}
+        os: ${{ fromJSON(needs.configure.outputs.fast-os) }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lisp-test-pyramid.yaml
+    with:
+      implementation: ${{ matrix.implementation }}
+      os: ${{ matrix.os }}
+      main-system: ${{ needs.configure.outputs.main-system }}
+      unit-tests-system: ${{ needs.configure.outputs.unit-tests-system }}
+      unit-tests-entrypoint: ${{ needs.configure.outputs.unit-tests-entrypoint }}
+      
+  quality-assurance:
+    name: 'Quality Assurance'
+    needs:
+      - configure
+      - fast-testsuite
+    if: needs.configure.outputs.linter-system != ''
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lisp-quality-assurance.yaml
+    with:
+      linter-system: ${{ needs.configure.outputs.unit-tests-system }}
+      linter-entrypoint: ${{ needs.configure.outputs.unit-tests-entrypoint }}
+
+  tier-1-testsuite:
+    name: 'Tier 1 Testsuite'
+    needs:
+      - configure
+      - fast-testsuite
+      - quality-assurance
+    strategy:
+      matrix:
+        implementation: ${{ fromJSON(needs.configure.outputs.tier-1-implementation) }}
+        os: ${{ fromJSON(needs.configure.outputs.tier-1-os) }}
+        exclude:
+          - os: 'ubuntu-latest'
+            implementation: 'ccl'
+          - os: 'windows-latest'
+            implementation: 'ccl'
+          - os: 'windows-latest'
+            implementation: 'ecl'
+          - os: 'windows-latest'
+            implementation: 'gcl'
+          - os: 'windows-latest'
+            implementation: 'clisp'
+          - os: 'windows-latest'
+            implementation: 'clasp'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lisp-test-pyramid.yaml
+    with:
+      implementation: ${{ matrix.implementation }}
+      os: ${{ matrix.os }}
+      main-system: ${{ needs.configure.outputs.main-system }}
+      unit-tests-system: ${{ needs.configure.outputs.unit-tests-system }}
+      unit-tests-entrypoint: ${{ needs.configure.outputs.unit-tests-entrypoint }}
+      component-tests-system: ${{ needs.configure.outputs.component-tests-system }}
+      component-tests-entrypoint: ${{ needs.configure.outputs.component-tests-entrypoint }}
+      deployment-tests-system: ${{ needs.configure.outputs.deployment-tests-system }}
+      deployment-tests-entrypoint: ${{ needs.configure.outputs.deployment-tests-entrypoint }}
+
+  tier-2-testsuite:
+    name: 'Tier 2 Testsuite'
+    needs:
+      - configure
+      - fast-testsuite
+      - tier-1-testsuite
+      - quality-assurance
+    strategy:
+      matrix:
+        implementation: ${{ fromJSON(needs.configure.outputs.tier-2-implementation) }}
+        os: ${{ fromJSON(needs.configure.outputs.tier-2-os) }}
+        exclude:
+          - os: 'ubuntu-latest'
+            implementation: 'ccl'
+          - os: 'windows-latest'
+            implementation: 'abcl'
+          - os: 'windows-latest'
+            implementation: 'ccl'
+          - os: 'windows-latest'
+            implementation: 'ecl'
+          - os: 'windows-latest'
+            implementation: 'gcl'
+          - os: 'windows-latest'
+            implementation: 'clisp'
+          - os: 'windows-latest'
+            implementation: 'clasp'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/lisp-test-pyramid.yaml
+    with:
+      experimental: true
+      implementation: ${{ matrix.implementation }}
+      os: ${{ matrix.os }}
+      main-system: ${{ needs.configure.outputs.main-system }}
+      unit-tests-system: ${{ needs.configure.outputs.unit-tests-system }}
+      unit-tests-entrypoint: ${{ needs.configure.outputs.unit-tests-entrypoint }}
+      component-tests-system: ${{ needs.configure.outputs.component-tests-system }}
+      component-tests-entrypoint: ${{ needs.configure.outputs.component-tests-entrypoint }}
+      deployment-tests-system: ${{ needs.configure.outputs.deployment-tests-system }}
+      deployment-tests-entrypoint: ${{ needs.configure.outputs.deployment-tests-entrypoint }}
+
+  documentation:
+    name: 'Documentation'
+    if: needs.configure.outputs.enable-texinfo-documentation
+    needs:
+      - configure
+      - fast-testsuite
+      - quality-assurance
+    runs-on: macos-latest
+    steps:
+      - name: 'Install MacPorts'
+        if: runner.os == 'macOS'
+        uses: melusina-org/gha-install-macports@v1
+      - uses: actions/checkout@v3
+      - name: 'Setup Common Lisp'
+        uses: melusina-org/setup-common-lisp@v1
+        with:
+          implementation: sbcl
+      - name: 'Setup QuickLisp'
+        uses: melusina-org/setup-quicklisp@v1
+        with:
+          implementation: sbcl
+      - name: 'Make documentation'
+        uses: melusina-org/make-lisp-system-documentation-texinfo@v1
+        with:
+          system: ${{ needs.configure.outputs.main-system }}
+
+  executables:
+    name: 'Executables'
+    needs:
+      - configure
+      - quality-assurance
+      - tier-1-testsuite
+    strategy:
+      matrix:
+        implementation: ${{ fromJSON(needs.configure.outputs.tier-1-implementation) }}
+        os: ${{ fromJSON(needs.configure.outputs.tier-1-os) }}
+        exclude:
+          - implementation: 'ccl'
+          - implementation: 'abcl'
+          - implementation: 'ecl'
+          - implementation: 'gcl'
+          - implementation: 'clasp'
+          - implementation: 'clisp'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: 'Install MacPorts'
+        if: runner.os == 'macOS'
+        uses: melusina-org/gha-install-macports@v1
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+      - name: 'Setup Common Lisp'
+        uses: melusina-org/setup-common-lisp@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+      - name: 'Setup QuickLisp'
+        continue-on-error: true
+        id: quicklisp
+        uses: melusina-org/setup-quicklisp@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          additional-systems: >-
+            ${{ needs.configure.outputs.executable-system }}
+      - name: 'Install CL-GITHUB-ACTIONS'
+        uses: actions/checkout@v4
+        with:
+          repository: melusina-org/cl-github-actions
+          path: ${{ steps.quicklisp.outputs.quicklisp-local-projects }}/cl-github-actions
+      - name: 'Make Executable Programs'
+        uses: melusina-org/make-common-lisp-program@v1
+        id: make
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.executable-system }}
+      - name: 'Upload Executable Programs'
+        uses: actions/upload-artifact@v3
+        with:
+          name: Executable Program ${{ matrix.implementation }} ${{ runner.os }} ${{ runner.arch }}
+          path: ${{ steps.make.outputs.build-pathname }}

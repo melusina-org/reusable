@@ -1,0 +1,143 @@
+name: 'Test Pyramid for Lisp System'
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: >-
+           The operating system to run the tests on.
+        type: string
+        required: false
+        default: 'macos-latest'
+      implementation:
+        description: >-
+           The Common Lisp implementation to run the tests against.
+        type: string
+        required: false
+        default: 'sbcl'
+      experimental:
+        description: >-
+          Flag to mark experimental setups. An experimental setup is a
+          setup whose tests results are interesting but whose failure
+          will not be seen as a failure of the testing process.
+        type: boolean
+        required: false
+        default: false
+      main-system:
+        description: 'The Common Lisp system subject to the tests.'
+        type: string
+        required: true      
+      unit-tests-system:
+        description: 'The Common Lisp system where unit tests are defined.'
+        type: string
+        required: false
+        default: ''
+      unit-tests-entrypoint:
+        description: 'The entrypoint of unit tests in their Common Lisp system.'
+        type: string
+        required: false
+        default: ''
+      component-tests-system:
+        description: 'The Common Lisp system where component tests are defined.'
+        type: string
+        required: false
+        default: ''
+      component-tests-entrypoint:
+        description: 'The entrypoint of component tests in their Common Lisp system.'
+        type: string
+        required: false
+        default: ''
+      deployment-tests-system:
+        description: 'The Common Lisp system where deployment tests are defined.'
+        type: string
+        required: false
+        default: ''
+      deployment-tests-entrypoint:
+        description: 'The entrypoint of deployment tests in their Common Lisp system.'
+        type: string
+        required: false
+        default: ''
+jobs:
+  test-pyramid:
+    name: 'Test Pyramid'
+    runs-on: ${{ inputs.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: 'Install MacPorts'
+        if: runner.os == 'macOS'
+        uses: melusina-org/gha-install-macports@v1
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+      - name: 'Setup Common Lisp'
+        continue-on-error: inputs.experimental
+        uses: melusina-org/setup-common-lisp@v1
+        with:
+          implementation: ${{ inputs.implementation }}
+      - name: 'Setup QuickLisp'
+        continue-on-error: inputs.experimental
+        uses: melusina-org/setup-quicklisp@v1
+        with:
+          implementation: ${{ inputs.implementation }}
+          additional-systems: >-
+            ${{ inputs.main-system }}
+            ${{ inputs.unit-tests-system }}
+            ${{ inputs.component-tests-system }}
+            ${{ inputs.deployment-tests-system }}
+      - name: 'Compile main system with ASDF'
+        continue-on-error: inputs.experimental
+        uses: melusina-org/asdf-operate@v1
+        with:
+          implementation: ${{ inputs.implementation }}
+          system: ${{ inputs.main-system }}
+          operation: 'asdf:compile-op'
+      - name: 'Compile unit tests system with ASDF'
+        continue-on-error: inputs.experimental
+        if: inputs.unit-tests-system != ''
+        id: compile-unit-tests-system
+        uses: melusina-org/asdf-operate@v1
+        with:
+          implementation: ${{ inputs.implementation }}
+          system: ${{ inputs.unit-tests-system }}
+          operation: 'asdf:compile-op'
+      - name: 'Compile component tests system with ASDF'
+        continue-on-error: inputs.experimental
+        if: inputs.component-tests-system != ''
+        id: compile-component-tests-system
+        uses: melusina-org/asdf-operate@v1
+        with:
+          implementation: ${{ inputs.implementation }}
+          system: ${{ inputs.component-tests-system }}
+          operation: 'asdf:compile-op'
+      - name: 'Compile deployment tests system with ASDF'
+        continue-on-error: inputs.experimental
+        if: inputs.deployment-tests-system != ''
+        id: compile-deployment-tests-system
+        uses: melusina-org/asdf-operate@v1
+        with:
+          implementation: ${{ inputs.implementation }}
+          system: ${{ inputs.deployment-tests-system }}
+          operation: 'asdf:compile-op'
+      - name: 'Run unit tests'
+        continue-on-error: inputs.experimental
+        if: inputs.unit-tests-system != '' && steps.compile-unit-tests-system.outcome == 'success'
+        uses: melusina-org/run-common-lisp-program@v1
+        with:
+          implementation: ${{ inputs.implementation }}
+          system: ${{ inputs.unit-tests-system }}
+          entrypoint: ${{ inputs.unit-tests-entrypoint }}
+      - name: 'Run component tests'
+        continue-on-error: inputs.experimental
+        if: inputs.component-tests-system != '' && steps.compile-component-tests-system.outcome == 'success'
+        uses: melusina-org/run-common-lisp-program@v1
+        with:
+          implementation: ${{ inputs.implementation }}
+          system: ${{ inputs.component-tests-system }}
+          entrypoint: ${{ inputs.component-tests-entrypoint }}
+      - name: 'Run deployment tests'
+        continue-on-error: inputs.experimental
+        if: inputs.deployment-tests-system != '' && steps.compile-deployment-tests-system.outcome == 'success'
+        uses: melusina-org/run-common-lisp-program@v1
+        with:
+          implementation: ${{ inputs.implementation }}
+          system: ${{ inputs.deployment-tests-system }}
+          entrypoint: ${{ inputs.deployment-tests-entrypoint }}

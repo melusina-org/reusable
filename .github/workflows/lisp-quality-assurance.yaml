@@ -1,0 +1,53 @@
+name: 'Test Pyramid for Lisp System'
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: >-
+           The operating system to run the tests on.
+        type: string
+        required: false
+        default: 'macos-latest'
+      implementation:
+        description: >-
+           The Common Lisp implementation to run the tests against.
+        type: string
+        required: false
+        default: 'sbcl'
+      linter-system:
+        description: 'The Common Lisp system defining a linter function.'
+        type: string
+        required: true      
+      linter-entrypoint:
+        description: 'The entrypoint of the linter in its Common Lisp system.'
+        type: string
+        required: true      
+jobs:
+  quality-assurance:
+    name: 'Quality Assurance'
+    runs-on: ${{ inputs.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: 'Install MacPorts'
+        if: runner.os == 'macOS'
+        uses: melusina-org/gha-install-macports@v1
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+      - name: 'Setup Common Lisp'
+        uses: melusina-org/setup-common-lisp@v1
+        with:
+          implementation: ${{ inputs.implementation }}
+      - name: 'Setup QuickLisp'
+        uses: melusina-org/setup-quicklisp@v1
+        with:
+          implementation: ${{ inputs.implementation }}
+          additional-systems: >-
+            ${{ inputs.linter-system }}
+      - name: 'Run the linter'
+        continue-on-error: true
+        uses: melusina-org/run-common-lisp-program@v1
+        with:
+          implementation: ${{ inputs.implementation }}
+          system: ${{ inputs.linter-system }}
+          entrypoint: ${{ inputs.linter-entrypoint }}
