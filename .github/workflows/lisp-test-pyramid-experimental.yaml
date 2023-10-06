@@ -61,10 +61,12 @@ jobs:
       - name: 'Checkout repository'
         uses: actions/checkout@v3
       - name: 'Setup Common Lisp'
+        continue-on-error: true
         uses: melusina-org/setup-common-lisp@v1
         with:
           implementation: ${{ inputs.implementation }}
       - name: 'Setup QuickLisp'
+        continue-on-error: true
         uses: melusina-org/setup-quicklisp@v1
         with:
           implementation: ${{ inputs.implementation }}
@@ -74,12 +76,14 @@ jobs:
             ${{ inputs.component-tests-system }}
             ${{ inputs.deployment-tests-system }}
       - name: 'Compile main system with ASDF'
+        continue-on-error: true
         uses: melusina-org/asdf-operate@v1
         with:
           implementation: ${{ inputs.implementation }}
           system: ${{ inputs.main-system }}
           operation: 'asdf:compile-op'
       - name: 'Compile unit tests system with ASDF'
+        continue-on-error: true
         if: inputs.unit-tests-system != ''
         id: compile-unit-tests-system
         uses: melusina-org/asdf-operate@v1
@@ -88,6 +92,7 @@ jobs:
           system: ${{ inputs.unit-tests-system }}
           operation: 'asdf:compile-op'
       - name: 'Compile component tests system with ASDF'
+        continue-on-error: true
         if: inputs.component-tests-system != ''
         id: compile-component-tests-system
         uses: melusina-org/asdf-operate@v1
@@ -96,6 +101,7 @@ jobs:
           system: ${{ inputs.component-tests-system }}
           operation: 'asdf:compile-op'
       - name: 'Compile deployment tests system with ASDF'
+        continue-on-error: true
         if: inputs.deployment-tests-system != ''
         id: compile-deployment-tests-system
         uses: melusina-org/asdf-operate@v1
@@ -104,6 +110,7 @@ jobs:
           system: ${{ inputs.deployment-tests-system }}
           operation: 'asdf:compile-op'
       - name: 'Run unit tests'
+        continue-on-error: true
         if: inputs.unit-tests-system != '' && steps.compile-unit-tests-system.outcome == 'success'
         uses: melusina-org/run-common-lisp-program@v1
         with:
@@ -111,6 +118,7 @@ jobs:
           system: ${{ inputs.unit-tests-system }}
           entrypoint: ${{ inputs.unit-tests-entrypoint }}
       - name: 'Run component tests'
+        continue-on-error: true
         if: inputs.component-tests-system != '' && steps.compile-component-tests-system.outcome == 'success'
         uses: melusina-org/run-common-lisp-program@v1
         with:
@@ -118,6 +126,7 @@ jobs:
           system: ${{ inputs.component-tests-system }}
           entrypoint: ${{ inputs.component-tests-entrypoint }}
       - name: 'Run deployment tests'
+        continue-on-error: true
         if: inputs.deployment-tests-system != '' && steps.compile-deployment-tests-system.outcome == 'success'
         uses: melusina-org/run-common-lisp-program@v1
         with:

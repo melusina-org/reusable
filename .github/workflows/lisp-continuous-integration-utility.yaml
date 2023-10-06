@@ -172,9 +172,8 @@ jobs:
             implementation: 'clasp'
     permissions:
       contents: read
-    uses: ./.github/workflows/lisp-test-pyramid.yaml
+    uses: ./.github/workflows/lisp-test-pyramid-experimental.yaml
     with:
-      experimental: true
       implementation: ${{ matrix.implementation }}
       os: ${{ matrix.os }}
       main-system: ${{ needs.configure.outputs.main-system }}
