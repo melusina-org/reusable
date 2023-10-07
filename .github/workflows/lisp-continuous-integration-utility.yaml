@@ -41,6 +41,16 @@ jobs:
               2>&1 printf 'Parameter %s: %s\n' "$1" "${value}"
           }
 
+          exclude()
+          {
+            printf '['
+            printf '{"os":"ubuntu-latest","implementation":"ccl"}'
+            for implementation in 'ablc' 'ccl' 'ecl' 'gcl' 'clasp' 'clisp'; do
+              printf ',{"os":"windows-latest","implementation":"%s"}' "${implementation}"
+            done
+            printf ']'
+          }
+
           parameter fast-implementation '.fast.implementation' '["sbcl"]'
           parameter fast-os '.fast.os' '["macos-latest"]'
           parameter tier-1-implementation '.tier-1.implementation' '["sbcl"]'
@@ -58,6 +68,7 @@ jobs:
           parameter linter-system '.linter.system' '""'
           parameter linter-entrypoint '.linter.entrypoint' '""'
           parameter enable-texinfo-documentation '.enable-texinfo-documentation' 'false'
+          parameter exclude '.exclude' "$(exclude)"
     outputs:
       fast-implementation: ${{ steps.configure.outputs.fast-implementation }}
       fast-os: ${{ steps.configure.outputs.fast-os }}
@@ -76,7 +87,7 @@ jobs:
       deployment-tests-system: ${{ fromJSON(steps.configure.outputs.deployment-tests-system) }}
       deployment-tests-entrypoint: ${{ fromJSON(steps.configure.outputs.deployment-tests-entrypoint) }}
       enable-texinfo-documentation: ${{ fromJSON(steps.configure.outputs.enable-texinfo-documentation) }}
-
+      exclude: ${{ steps.configure.outputs.exclude }}
   fast-testsuite:
     needs: configure
     name: 'Fast Testsuite'
@@ -117,19 +128,7 @@ jobs:
       matrix:
         implementation: ${{ fromJSON(needs.configure.outputs.tier-1-implementation) }}
         os: ${{ fromJSON(needs.configure.outputs.tier-1-os) }}
-        exclude:
-          - os: 'ubuntu-latest'
-            implementation: 'ccl'
-          - os: 'windows-latest'
-            implementation: 'ccl'
-          - os: 'windows-latest'
-            implementation: 'ecl'
-          - os: 'windows-latest'
-            implementation: 'gcl'
-          - os: 'windows-latest'
-            implementation: 'clisp'
-          - os: 'windows-latest'
-            implementation: 'clasp'
+        exclude: ${{ fromJSON(needs.configure.outputs.exclude) }}
     permissions:
       contents: read
     uses: ./.github/workflows/lisp-test-pyramid.yaml
@@ -155,21 +154,7 @@ jobs:
       matrix:
         implementation: ${{ fromJSON(needs.configure.outputs.tier-2-implementation) }}
         os: ${{ fromJSON(needs.configure.outputs.tier-2-os) }}
-        exclude:
-          - os: 'ubuntu-latest'
-            implementation: 'ccl'
-          - os: 'windows-latest'
-            implementation: 'abcl'
-          - os: 'windows-latest'
-            implementation: 'ccl'
-          - os: 'windows-latest'
-            implementation: 'ecl'
-          - os: 'windows-latest'
-            implementation: 'gcl'
-          - os: 'windows-latest'
-            implementation: 'clisp'
-          - os: 'windows-latest'
-            implementation: 'clasp'
+        exclude: ${{ fromJSON(needs.configure.outputs.exclude) }}
     permissions:
       contents: read
     uses: ./.github/workflows/lisp-test-pyramid-experimental.yaml
