@@ -129,45 +129,118 @@ jobs:
         implementation: ${{ fromJSON(needs.configure.outputs.tier-1-implementation) }}
         os: ${{ fromJSON(needs.configure.outputs.tier-1-os) }}
         exclude: ${{ fromJSON(needs.configure.outputs.exclude) }}
+        include:
+          - executable: false
+          - implementation: 'sbcl'
+            executable: true
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
-    uses: ./.github/workflows/lisp-test-pyramid.yaml
-    with:
-      implementation: ${{ matrix.implementation }}
-      os: ${{ matrix.os }}
-      main-system: ${{ needs.configure.outputs.main-system }}
-      unit-tests-system: ${{ needs.configure.outputs.unit-tests-system }}
-      unit-tests-entrypoint: ${{ needs.configure.outputs.unit-tests-entrypoint }}
-      component-tests-system: ${{ needs.configure.outputs.component-tests-system }}
-      component-tests-entrypoint: ${{ needs.configure.outputs.component-tests-entrypoint }}
-      deployment-tests-system: ${{ needs.configure.outputs.deployment-tests-system }}
-      deployment-tests-entrypoint: ${{ needs.configure.outputs.deployment-tests-entrypoint }}
+    steps:
 
-  tier-2-testsuite:
-    name: 'Tier 2 Testsuite'
-    needs:
-      - configure
-      - fast-testsuite
-      - tier-1-testsuite
-      - quality-assurance
-    strategy:
-      matrix:
-        implementation: ${{ fromJSON(needs.configure.outputs.tier-2-implementation) }}
-        os: ${{ fromJSON(needs.configure.outputs.tier-2-os) }}
-        exclude: ${{ fromJSON(needs.configure.outputs.exclude) }}
-    permissions:
-      contents: read
-    uses: ./.github/workflows/lisp-test-pyramid-experimental.yaml
-    with:
-      implementation: ${{ matrix.implementation }}
-      os: ${{ matrix.os }}
-      main-system: ${{ needs.configure.outputs.main-system }}
-      unit-tests-system: ${{ needs.configure.outputs.unit-tests-system }}
-      unit-tests-entrypoint: ${{ needs.configure.outputs.unit-tests-entrypoint }}
-      component-tests-system: ${{ needs.configure.outputs.component-tests-system }}
-      component-tests-entrypoint: ${{ needs.configure.outputs.component-tests-entrypoint }}
-      deployment-tests-system: ${{ needs.configure.outputs.deployment-tests-system }}
-      deployment-tests-entrypoint: ${{ needs.configure.outputs.deployment-tests-entrypoint }}
+      - name: 'Install MacPorts'
+        if: runner.os == 'macOS'
+        uses: melusina-org/gha-install-macports@v1
+ 
+      - name: 'Checkout repository'
+        uses: actions/checkout@v3
+
+      - name: 'Setup Common Lisp'
+        uses: melusina-org/setup-common-lisp@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+
+      - name: 'Setup QuickLisp'
+        id: quicklisp
+        uses: melusina-org/setup-quicklisp@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          additional-systems: >-
+            ${{ needs.configure.outputs.main-system }}
+            ${{ needs.configure.outputs.unit-tests-system }}
+            ${{ needs.configure.outputs.component-tests-system }}
+            ${{ needs.configure.outputs.deployment-tests-system }}
+
+      - name: 'Install CL-GITHUB-ACTIONS'
+        uses: actions/checkout@v4
+        with:
+          repository: melusina-org/cl-github-actions
+          path: ${{ steps.quicklisp.outputs.quicklisp-local-projects }}/cl-github-actions
+
+      - name: 'Compile main system with ASDF'
+        uses: melusina-org/asdf-operate@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.main-system }}
+          operation: 'asdf:compile-op'
+
+      - name: 'Compile unit tests system with ASDF'
+        if: needs.configure.outputs.unit-tests-system != ''
+        id: compile-unit-tests-system
+        uses: melusina-org/asdf-operate@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.unit-tests-system }}
+          operation: 'asdf:compile-op'
+
+      - name: 'Compile component tests system with ASDF'
+        if: needs.configure.outputs.component-tests-system != ''
+        id: compile-component-tests-system
+        uses: melusina-org/asdf-operate@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.component-tests-system }}
+          operation: 'asdf:compile-op'
+
+      - name: 'Compile deployment tests system with ASDF'
+        if: needs.configure.outputs.deployment-tests-system != ''
+        id: compile-deployment-tests-system
+        uses: melusina-org/asdf-operate@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.deployment-tests-system }}
+          operation: 'asdf:compile-op'
+
+      - name: 'Run unit tests'
+        if: needs.configure.outputs.unit-tests-system != ''
+        uses: melusina-org/run-common-lisp-program@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.unit-tests-system }}
+          entrypoint: ${{ needs.configure.outputs.unit-tests-entrypoint }}
+
+      - name: 'Run component tests'
+        if: needs.configure.outputs.component-tests-system != ''
+        uses: melusina-org/run-common-lisp-program@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.component-tests-system }}
+          entrypoint: ${{ needs.configure.outputs.component-tests-entrypoint }}
+
+      - name: 'Make Executable Programs'
+        id: executable
+        if: matrix.executable
+        uses: melusina-org/make-common-lisp-program@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.executable-system }}
+
+      - name: 'Run deployment tests'
+        if: matrix.executable && needs.configure.outputs.deployment-tests-system != ''
+        uses: melusina-org/run-common-lisp-program@v1
+        with:
+          implementation: ${{ matrix.implementation }}
+          system: ${{ needs.configure.outputs.deployment-tests-system }}
+          entrypoint: ${{ needs.configure.outputs.deployment-tests-entrypoint }}
+        env:
+          MELUSINA_COMMON_LISP_PROGRAM: ${{ steps.executable.outputs.build-pathname }}
+
+      - name: 'Upload Executable Programs'
+        if: matrix.executable
+        uses: actions/upload-artifact@v3
+        with:
+          name: Executable Program ${{ matrix.implementation }} ${{ runner.os }} ${{ runner.arch }}
+          path: ${{ steps.executable.outputs.build-pathname }}
 
   documentation:
     name: 'Documentation'
@@ -194,58 +267,3 @@ jobs:
         uses: melusina-org/make-lisp-system-documentation-texinfo@v1
         with:
           system: ${{ needs.configure.outputs.main-system }}
-
-  executables:
-    name: 'Executables'
-    needs:
-      - configure
-      - quality-assurance
-      - tier-1-testsuite
-    strategy:
-      matrix:
-        implementation: ${{ fromJSON(needs.configure.outputs.tier-1-implementation) }}
-        os: ${{ fromJSON(needs.configure.outputs.tier-1-os) }}
-        exclude:
-          - implementation: 'ccl'
-          - implementation: 'abcl'
-          - implementation: 'ecl'
-          - implementation: 'gcl'
-          - implementation: 'clasp'
-          - implementation: 'clisp'
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-    steps:
-      - name: 'Install MacPorts'
-        if: runner.os == 'macOS'
-        uses: melusina-org/gha-install-macports@v1
-      - name: 'Checkout repository'
-        uses: actions/checkout@v4
-      - name: 'Setup Common Lisp'
-        uses: melusina-org/setup-common-lisp@v1
-        with:
-          implementation: ${{ matrix.implementation }}
-      - name: 'Setup QuickLisp'
-        continue-on-error: true
-        id: quicklisp
-        uses: melusina-org/setup-quicklisp@v1
-        with:
-          implementation: ${{ matrix.implementation }}
-          additional-systems: >-
-            ${{ needs.configure.outputs.executable-system }}
-      - name: 'Install CL-GITHUB-ACTIONS'
-        uses: actions/checkout@v4
-        with:
-          repository: melusina-org/cl-github-actions
-          path: ${{ steps.quicklisp.outputs.quicklisp-local-projects }}/cl-github-actions
-      - name: 'Make Executable Programs'
-        uses: melusina-org/make-common-lisp-program@v1
-        id: make
-        with:
-          implementation: ${{ matrix.implementation }}
-          system: ${{ needs.configure.outputs.executable-system }}
-      - name: 'Upload Executable Programs'
-        uses: actions/upload-artifact@v3
-        with:
-          name: Executable Program ${{ matrix.implementation }} ${{ runner.os }} ${{ runner.arch }}
-          path: ${{ steps.make.outputs.build-pathname }}
