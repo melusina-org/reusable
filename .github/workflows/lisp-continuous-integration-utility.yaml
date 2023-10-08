@@ -220,7 +220,7 @@ jobs:
       - name: 'Make Executable Programs'
         id: executable
         if: matrix.executable
-        uses: melusina-org/make-common-lisp-program@v1
+        uses: melusina-org/make-common-lisp-program@windows-support
         with:
           implementation: ${{ matrix.implementation }}
           system: ${{ needs.configure.outputs.executable-system }}
